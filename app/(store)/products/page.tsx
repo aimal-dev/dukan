@@ -2,11 +2,11 @@ import ProductCard from "@/components/store/ProductCard";
 import ProductFilters from "@/components/store/ProductFilters";
 import SortSelect from "@/components/store/SortSelect";
 import { Separator } from "@/components/ui/separator";
-import type { Product } from "@/app/types/product";
-import type { SortKey } from "@/app/types/filters";
-import { MOCK_PRODUCTS } from "@/app/lib/mock";
+import type { SortKey } from "@/app/types/filters"; // adjust path if your types are under app/types
+import { MOCK_PRODUCTS } from "@/app/lib/mock"; // adjust path if you kept it under app/lib
 
-type Props = { searchParams: { [key: string]: string | string[] | undefined } };
+type SearchParams = Record<string, string | string[] | undefined>;
+type Props = { searchParams: SearchParams | Promise<SearchParams> };
 
 const CATS = [
   "Staples",
@@ -16,19 +16,25 @@ const CATS = [
   "Fruits & Veggies",
 ] as const;
 
-export default function ProductsPage({ searchParams }: Props) {
-  const getStr = (k: string, d = "") =>
-    typeof searchParams[k] === "string" ? (searchParams[k] as string) : d;
+function getParam(sp: SearchParams, key: string, fallback = "") {
+  const v = sp?.[key];
+  if (Array.isArray(v)) return v[0] ?? fallback;
+  if (typeof v === "string") return v;
+  return fallback;
+}
 
-  const selectedCats = getStr("c").split(",").filter(Boolean);
-  const min = Number(getStr("min", "0"));
-  const max = Number(getStr("max", "5000"));
-  const inStock = getStr("stock") === "1";
-  const sort = getStr("sort", "new") as SortKey;
-  const q = getStr("q").toLowerCase();
+export default async function ProductsPage({ searchParams }: Props) {
+  // Next 15 friendly: await works even if it's not a Promise
+  const sp = await searchParams;
 
-  // Filter + sort (server side on mock)
-  let items = MOCK_PRODUCTS.filter((p) => {
+  const selectedCats = getParam(sp, "c", "").split(",").filter(Boolean);
+  const min = Number(getParam(sp, "min", "0")) || 0;
+  const max = Number(getParam(sp, "max", "5000")) || 5000;
+  const inStock = getParam(sp, "stock") === "1";
+  const sort = getParam(sp, "sort", "new") as SortKey;
+  const q = getParam(sp, "q", "").toLowerCase();
+
+  let items = [...MOCK_PRODUCTS].filter((p) => {
     const priceRs = Math.round(p.price / 100);
     const catOk =
       !selectedCats.length || selectedCats.includes(p.categoryId || "");
@@ -38,8 +44,8 @@ export default function ProductsPage({ searchParams }: Props) {
     return catOk && priceOk && stockOk && nameOk;
   });
 
-  if (sort === "plh") items = items.sort((a, b) => a.price - b.price);
-  if (sort === "phl") items = items.sort((a, b) => b.price - a.price);
+  if (sort === "plh") items.sort((a, b) => a.price - b.price);
+  if (sort === "phl") items.sort((a, b) => b.price - a.price);
 
   return (
     <div className="space-y-4">
@@ -52,9 +58,8 @@ export default function ProductsPage({ searchParams }: Props) {
       <div className="flex gap-6">
         <ProductFilters
           categories={Array.from(CATS)}
-          initial={{ cats: selectedCats, min, max, inStock, sort,price:[min,max] }}
+          initial={{ cats: selectedCats, min, max, inStock, sort,price:[min,max] }} // note: no 'price' here
         />
-
         <section className="w-full">
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {items.map((p) => (
